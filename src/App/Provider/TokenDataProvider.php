@@ -14,6 +14,7 @@ class TokenDataProvider
     private const TOKENS = [
         ['token' => 'token1234', 'permissions' => ['read', 'write']],
         ['token' => 'tokenReadonly', 'permissions' => ['read']],
+        ['token' => 'tokenWriteOnly', 'permissions' => ['write']],
     ];
 
     /**

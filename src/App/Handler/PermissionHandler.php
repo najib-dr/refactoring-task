@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Handler;
 
 use App\Provider\TokenDataProvider;
+use Fig\Http\Message\StatusCodeInterface;
 use ProgPhil1337\SimpleReactApp\HTTP\Response\JSONResponse;
 use ProgPhil1337\SimpleReactApp\HTTP\Response\ResponseInterface;
 use ProgPhil1337\SimpleReactApp\HTTP\Routing\Attribute\Route;
@@ -16,45 +17,47 @@ use Psr\Http\Message\ServerRequestInterface;
 #[Route(httpMethod: HttpMethod::GET, uri: '/has_permission/{token}')]
 class PermissionHandler implements HandlerInterface
 {
-    /**
-     * Dependency Injection would be available here
-     */
-    public function __construct()
-    {
+    private const MSG_PERMISSION_DENIED = 'Permission denied';
+    private const MSG_PERMISSION_GRANTED = 'Permission granted';
+    private const MSG_TOKEN_MISSING = 'Token param is missing';
 
+    public function __construct(
+        private readonly TokenDataProvider $dataProvider,
+    ) {
     }
 
     public function __invoke(ServerRequestInterface $serverRequest, RouteParameters $parameters): ResponseInterface
     {
-        $np = "read";
+        $tokenParam = $parameters->get('token', 'no_token');
 
-        $tId = $parameters->get("token", "kein_token");
-
-        if ($tId != "kein_token") {
-            $dataProvider = new TokenDataProvider();
-
-            $tokens = $dataProvider->getTokens();
-            $token = null;
-
-            foreach ($tokens as $t) {
-                if ($t["token"] == $tId) {
-                    $token = $t;
-                }
-            }
-
-            foreach ($token["permissions"] as $p) {
-                if ($p == $np) {
-                    $a = $a + 1;
-                }
-            }
-
-            if ($a > 0) {
-                return new JSONResponse(array("permission" => true), 400);
-            } else {
-                return new JSONResponse(array('permission' => false), 400);
-            }
-        } else {
-            return new JSONResponse(array("permission" => false), 400);
+        if ($tokenParam === 'no_token') {
+            return $this->jsonResponse(self::MSG_TOKEN_MISSING, StatusCodeInterface::STATUS_BAD_REQUEST, false);
         }
+
+        $token = $this->getToken($tokenParam);
+
+        if ($token === null || !$this->hasReadPermission($token)) {
+            return $this->jsonResponse(self::MSG_PERMISSION_DENIED, StatusCodeInterface::STATUS_FORBIDDEN, false);
+        }
+
+        return $this->jsonResponse(self::MSG_PERMISSION_GRANTED, StatusCodeInterface::STATUS_OK, true);
+    }
+
+    private function getToken(string $tokenParam): ?array
+    {
+        return array_find(
+            $this->dataProvider->getTokens(),
+            fn($token) => $token['token'] === $tokenParam,
+        );
+    }
+
+    private function hasReadPermission(array $token): bool
+    {
+        return in_array('read', $token['permissions']);
+    }
+
+    private function jsonResponse(string $message, int $status, bool $permission): JSONResponse
+    {
+        return new JSONResponse(['permission' => $permission, 'message' => $message], $status);
     }
 }
